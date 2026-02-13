@@ -19,9 +19,12 @@ class BaseConfig:
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=7)
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        "DATABASE_URL", "postgresql://aypa:password@localhost:5432/aypa_taxai"
-    )
+
+    # Railway uses postgres:// but SQLAlchemy requires postgresql://
+    _db_url = os.getenv("DATABASE_URL", "postgresql://aypa:password@localhost:5432/aypa_taxai")
+    if _db_url.startswith("postgres://"):
+        _db_url = _db_url.replace("postgres://", "postgresql://", 1)
+    SQLALCHEMY_DATABASE_URI = _db_url
 
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 

@@ -39,12 +39,17 @@ def create_app(config_name=None):
     limiter.init_app(app)
     socketio.init_app(app, cors_allowed_origins="*", async_mode="eventlet")
 
-    # Initialize Redis
+    # Initialize Redis (graceful fallback if unavailable)
     global redis_client
-    redis_client = redis.from_url(
-        app.config.get("REDIS_URL", "redis://localhost:6379/0"),
-        decode_responses=True,
-    )
+    try:
+        redis_client = redis.from_url(
+            app.config.get("REDIS_URL", "redis://localhost:6379/0"),
+            decode_responses=True,
+        )
+        redis_client.ping()
+    except (redis.ConnectionError, redis.TimeoutError):
+        app.logger.warning("Redis not available - caching disabled")
+        redis_client = None
 
     # Register blueprints
     _register_blueprints(app)
