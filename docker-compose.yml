@@ -1,0 +1,256 @@
+# =============================================================================
+# Aypa TaxAI - Docker Compose Configuration
+# Production-ready multi-service orchestration
+# =============================================================================
+#
+# Usage:
+#   docker-compose up -d                   # Start all services
+#   docker-compose up -d --build           # Rebuild and start
+#   docker-compose logs -f backend         # Follow backend logs
+#   docker-compose down -v                 # Stop and remove volumes
+#
+# Required: Copy .env.example to .env and fill in secrets before starting.
+# =============================================================================
+
+version: "3.9"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Backend - Flask API Server
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../infrastructure/docker/Dockerfile.backend
+    container_name: aypa-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-aypa}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aypa_taxai}
+      - REDIS_URL=redis://redis:6379/0
+      - RATELIMIT_STORAGE_URI=redis://redis:6379/1
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_logs:/app/logs
+      - knowledge_base:/app/knowledge_base
+    ports:
+      - "${BACKEND_PORT:-5000}:5000"
+    networks:
+      - aypa-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.25"
+
+  # ---------------------------------------------------------------------------
+  # Frontend - Next.js Application
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../infrastructure/docker/Dockerfile.frontend
+    container_name: aypa-frontend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost/api}
+      - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-ws://localhost}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    networks:
+      - aypa-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.1"
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: aypa-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aypa_taxai}
+      POSTGRES_USER: ${POSTGRES_USER:-aypa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    networks:
+      - aypa-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aypa} -d ${POSTGRES_DB:-aypa_taxai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.1"
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=768MB"
+      - "-c"
+      - "work_mem=4MB"
+      - "-c"
+      - "maintenance_work_mem=128MB"
+      - "-c"
+      - "log_min_duration_statement=1000"
+
+  # ---------------------------------------------------------------------------
+  # Redis - Caching and Message Broker
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: aypa-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - aypa-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.25"
+        reservations:
+          memory: 64M
+          cpus: "0.05"
+    command:
+      - "redis-server"
+      - "--appendonly"
+      - "yes"
+      - "--maxmemory"
+      - "256mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+      - "--save"
+      - "60"
+      - "1000"
+      - "--loglevel"
+      - "warning"
+
+  # ---------------------------------------------------------------------------
+  # Nginx - Reverse Proxy and Load Balancer
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: aypa-nginx
+    restart: unless-stopped
+    volumes:
+      - ./infrastructure/docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_logs:/var/log/nginx
+      # Uncomment for SSL certificates
+      # - ./infrastructure/ssl:/etc/nginx/ssl:ro
+      # - certbot_data:/var/www/certbot:ro
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      # Uncomment for SSL
+      # - "${HTTPS_PORT:-443}:443"
+    networks:
+      - aypa-network
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/nginx-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+        reservations:
+          memory: 64M
+          cpus: "0.05"
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres_data:
+    driver: local
+    name: aypa-postgres-data
+  redis_data:
+    driver: local
+    name: aypa-redis-data
+  backend_uploads:
+    driver: local
+    name: aypa-backend-uploads
+  backend_logs:
+    driver: local
+    name: aypa-backend-logs
+  knowledge_base:
+    driver: local
+    name: aypa-knowledge-base
+  nginx_logs:
+    driver: local
+    name: aypa-nginx-logs
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  aypa-network:
+    driver: bridge
+    name: aypa-network
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
