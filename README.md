@@ -31,8 +31,7 @@ Frontend (Next.js 14) → API Gateway (Flask) → Services
 | Backend | Python 3.11+, Flask 3.0, Celery, SQLAlchemy |
 | AI/Search | Gemini 1.5, sentence-transformers, FAISS, BM25 |
 | Database | PostgreSQL 15, Redis 7 |
-| Infrastructure | Docker, Terraform, AWS, GitHub Actions |
-| Deployment | Vercel (frontend), Railway (backend) — or AWS |
+| Infrastructure | Docker, Terraform, AWS |
 
 ## Quick Start
 
@@ -98,7 +97,8 @@ Ayyapatool/
 │   └── package.json
 ├── infrastructure/
 │   ├── docker/           # Dockerfiles, nginx config
-│   └── terraform/        # AWS infrastructure as code
+│   ├── terraform/        # AWS production infrastructure (ECS, RDS, etc.)
+│   └── terraform-lite/   # AWS minimal-cost setup (single EC2)
 ├── docs/                 # PRD suite (4 documents)
 ├── docker-compose.yml
 └── .github/workflows/    # CI/CD pipelines
@@ -122,78 +122,73 @@ Ayyapatool/
 | GET | /api/payroll/payslips | List payslips |
 | POST | /api/payroll/fnf | Full & Final settlement |
 
-## Deploy to Vercel + Railway (Quick Test)
+## Deploy to AWS (Minimal Cost - ~$10-15/month)
 
-The fastest way to get the app live for testing — **no AWS required**.
+One-command deployment to a single EC2 instance running docker-compose.
 
-### Step 1: Deploy Backend on Railway
+### Prerequisites
 
-1. Go to [railway.app](https://railway.app) and sign in with GitHub
-2. Click **"New Project"** → **"Deploy from GitHub Repo"** → Select this repo
-3. Set the **Root Directory** to `backend`
-4. Railway auto-detects the `Procfile`. Add these services:
-   - Click **"+ New"** → **"Database"** → **PostgreSQL** (free tier available)
-   - Click **"+ New"** → **"Database"** → **Redis** (free tier available)
-5. Railway auto-sets `DATABASE_URL` and `REDIS_URL`. Add these environment variables:
-   ```
-   FLASK_ENV=production
-   SECRET_KEY=<generate-a-random-64-char-string>
-   JWT_SECRET_KEY=<generate-another-random-64-char-string>
-   GOOGLE_API_KEY=<your-gemini-api-key>
-   CORS_ORIGINS=https://your-app.vercel.app
-   ```
-6. Click **Deploy** — Railway builds and runs the backend
-7. Copy the Railway public URL (e.g., `https://aypa-backend-production.up.railway.app`)
+1. **AWS Account** with CLI configured: `aws configure`
+2. **Terraform** installed: [Install Terraform](https://developer.hashicorp.com/terraform/install)
+3. **Google Gemini API key** (optional): [Get API Key](https://aistudio.google.com/apikey)
 
-**After deploy, initialize the database:**
+### Option A: One-Command Deploy
+
 ```bash
-# Using Railway CLI
-npm install -g @railway/cli
-railway login
-railway link
-railway run flask db upgrade
+chmod +x deploy.sh
+./deploy.sh
 ```
 
-### Step 2: Deploy Frontend on Vercel
+The script will:
+- Ask for your config (region, instance size, API keys)
+- Generate secure passwords automatically
+- Provision an EC2 instance on AWS
+- Install Docker and deploy the full app
+- Output the URL and SSH access details
 
-1. Go to [vercel.com](https://vercel.com) and sign in with GitHub
-2. Click **"Add New Project"** → Import this repo
-3. Set **Root Directory** to `frontend`
-4. Set **Framework Preset** to `Next.js`
-5. Add Environment Variables:
-   ```
-   NEXT_PUBLIC_API_URL=https://your-railway-backend-url.up.railway.app/api
-   NEXT_PUBLIC_WS_URL=https://your-railway-backend-url.up.railway.app
-   ```
-6. Click **Deploy**
+### Option B: Manual Terraform Deploy
 
-### Step 3: Connect & Test
+```bash
+cd infrastructure/terraform-lite
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your values
 
-1. Update Railway's `CORS_ORIGINS` to your Vercel URL: `https://your-app.vercel.app`
-2. Visit your Vercel URL and test:
-   - Register a new account
-   - Try the AI Tax Advisor
-   - Create a GST invoice
-   - Run a tax comparison
+terraform init
+terraform plan
+terraform apply
+```
 
-### Estimated Costs (Testing)
+After deploy, SSH in and monitor the setup:
+```bash
+ssh -i aypa-key.pem ec2-user@<public-ip>
+tail -f /var/log/aypa-setup.log         # Monitor setup progress
+sudo docker compose -f /opt/aypa/docker-compose.yml logs -f  # App logs
+```
 
-| Service | Free Tier | Paid Tier |
-|---------|-----------|-----------|
-| Railway (Backend + DB + Redis) | $5 free credit/month | ~$5-10/month |
-| Vercel (Frontend) | Free for hobby | $20/month (Pro) |
-| Google Gemini API | Free tier (60 req/min) | Pay-as-you-go |
-| **Total for testing** | **$0-5/month** | **~$25-30/month** |
+### Instance Sizing
 
-### Upgrading to AWS Production
+| Instance | vCPU | RAM | Monthly Cost | Best For |
+|----------|------|-----|-------------|----------|
+| t2.micro | 1 | 1 GB | **FREE** (if eligible) | Quick demo |
+| t3.micro | 2 | 1 GB | ~$8/month | Light testing |
+| t3.small | 2 | 2 GB | ~$15/month | **Recommended for testing** |
+| t3.medium | 2 | 4 GB | ~$30/month | Heavier testing with AI |
 
-When you're ready to go live at scale, use the existing Terraform configs:
+### To Stop Billing
+
+```bash
+cd infrastructure/terraform-lite
+terraform destroy    # Removes everything
+```
+
+### Upgrading to Production
+
+When ready for production scale, use the full infrastructure setup:
 ```bash
 cd infrastructure/terraform
 terraform init && terraform apply
 ```
-
-See the [Implementation & Deployment Guide](docs/04_IMPLEMENTATION_DEPLOYMENT_GUIDE.md) for full AWS setup.
+This provisions VPC, ECS Fargate, RDS, ElastiCache, ALB, S3, auto-scaling.
 
 ---
 
