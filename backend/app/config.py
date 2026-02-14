@@ -57,8 +57,10 @@ class BaseConfig:
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB upload limit
     ALLOWED_EXTENSIONS = {"pdf", "docx", "xlsx", "xls", "csv", "txt"}
 
-    # Rate limits (per user)
-    RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "redis://localhost:6379/1")
+    # Rate limits (per user) - falls back to main Redis URL
+    RATELIMIT_STORAGE_URI = os.getenv(
+        "RATELIMIT_STORAGE_URI", os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    )
 
     # Tier limits
     TIER_LIMITS = {

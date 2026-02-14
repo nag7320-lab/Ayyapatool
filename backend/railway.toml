@@ -1,9 +1,8 @@
 [build]
-builder = "DOCKERFILE"
-dockerfilePath = "../infrastructure/docker/Dockerfile.backend"
+builder = "NIXPACKS"
 
 [deploy]
-startCommand = "gunicorn --bind 0.0.0.0:$PORT --workers 2 --worker-class eventlet --timeout 120 --graceful-timeout 30 --keep-alive 5 --max-requests 1000 --max-requests-jitter 50 --access-logfile - --error-logfile - --log-level info wsgi:app"
+startCommand = "python -m flask db upgrade && gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --graceful-timeout 30 --keep-alive 5 --access-logfile - --error-logfile - --log-level info wsgi:app"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"

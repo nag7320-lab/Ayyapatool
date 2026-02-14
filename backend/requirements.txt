@@ -33,7 +33,6 @@ pandas==2.2.2
 
 # PDF Generation
 reportlab==4.2.0
-WeasyPrint==62.3
 
 # QR Code
 qrcode[pil]==7.4.2

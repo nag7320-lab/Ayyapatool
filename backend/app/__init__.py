@@ -37,7 +37,12 @@ def create_app(config_name=None):
     jwt.init_app(app)
     CORS(app, resources={r"/api/*": {"origins": app.config.get("CORS_ORIGINS", "*")}})
     limiter.init_app(app)
-    socketio.init_app(app, cors_allowed_origins="*", async_mode="eventlet")
+    try:
+        import eventlet  # noqa: F401
+        async_mode = "eventlet"
+    except ImportError:
+        async_mode = "threading"
+    socketio.init_app(app, cors_allowed_origins="*", async_mode=async_mode)
 
     # Initialize Redis (graceful fallback if unavailable)
     global redis_client
