@@ -1,9 +1,6 @@
 [phases.setup]
 nixPkgs = ["postgresql"]
 
-[phases.install]
-cmds = ["pip install --upgrade pip setuptools wheel", "pip install -r requirements.txt"]
-
 [start]
 cmd = "python -m flask db upgrade && gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --graceful-timeout 30 --keep-alive 5 --access-logfile - --error-logfile - --log-level info wsgi:app"
 
