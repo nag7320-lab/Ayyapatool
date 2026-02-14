@@ -24,5 +24,5 @@ output "ssh_key_file" {
 
 output "estimated_monthly_cost" {
   description = "Estimated monthly cost"
-  value       = "~$10-15/month (t3.small in ap-south-1)"
+  value       = var.instance_type == "t2.micro" ? "$0/month (FREE TIER)" : "~$10-15/month"
 }

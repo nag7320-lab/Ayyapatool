@@ -1,6 +1,6 @@
 # =============================================================================
 # Aypa TaxAI - Docker Compose Configuration
-# Production-ready multi-service orchestration
+# Optimized for AWS Free Tier (t2.micro: 1 vCPU, 1 GB RAM + 2 GB swap)
 # =============================================================================
 #
 # Usage:
@@ -30,7 +30,8 @@ services:
       - FLASK_ENV=${FLASK_ENV:-production}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-aypa}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aypa_taxai}
       - REDIS_URL=redis://redis:6379/0
-      - RATELIMIT_STORAGE_URI=redis://redis:6379/1
+      - RATELIMIT_STORAGE_URI=redis://redis:6379/0
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-1}
     volumes:
       - backend_uploads:/app/uploads
       - backend_logs:/app/logs
@@ -46,18 +47,12 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
-      interval: 30s
+      interval: 60s
       timeout: 10s
       retries: 5
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: "1.0"
-        reservations:
-          memory: 512M
-          cpus: "0.25"
+      start_period: 60s
+    mem_limit: 512m
+    memswap_limit: 1g
 
   # ---------------------------------------------------------------------------
   # Frontend - Next.js Application
@@ -81,18 +76,12 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]
-      interval: 30s
+      interval: 60s
       timeout: 10s
       retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: "0.5"
-        reservations:
-          memory: 256M
-          cpus: "0.1"
+      start_period: 60s
+    mem_limit: 256m
+    memswap_limit: 512m
 
   # ---------------------------------------------------------------------------
   # PostgreSQL Database
@@ -108,8 +97,6 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     networks:
       - aypa-network
     healthcheck:
@@ -118,26 +105,20 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: "0.5"
-        reservations:
-          memory: 256M
-          cpus: "0.1"
+    mem_limit: 256m
+    memswap_limit: 512m
     command:
       - "postgres"
       - "-c"
-      - "max_connections=200"
+      - "max_connections=50"
       - "-c"
-      - "shared_buffers=256MB"
+      - "shared_buffers=64MB"
       - "-c"
-      - "effective_cache_size=768MB"
+      - "effective_cache_size=128MB"
       - "-c"
-      - "work_mem=4MB"
+      - "work_mem=2MB"
       - "-c"
-      - "maintenance_work_mem=128MB"
+      - "maintenance_work_mem=32MB"
       - "-c"
       - "log_min_duration_statement=1000"
 
@@ -150,8 +131,6 @@ services:
     restart: unless-stopped
     volumes:
       - redis_data:/data
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
     networks:
       - aypa-network
     healthcheck:
@@ -160,20 +139,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: "0.25"
-        reservations:
-          memory: 64M
-          cpus: "0.05"
+    mem_limit: 64m
+    memswap_limit: 128m
     command:
       - "redis-server"
       - "--appendonly"
       - "yes"
       - "--maxmemory"
-      - "256mb"
+      - "48mb"
       - "--maxmemory-policy"
       - "allkeys-lru"
       - "--save"
@@ -183,7 +156,7 @@ services:
       - "warning"
 
   # ---------------------------------------------------------------------------
-  # Nginx - Reverse Proxy and Load Balancer
+  # Nginx - Reverse Proxy
   # ---------------------------------------------------------------------------
   nginx:
     image: nginx:1.25-alpine
@@ -192,13 +165,8 @@ services:
     volumes:
       - ./infrastructure/docker/nginx.conf:/etc/nginx/nginx.conf:ro
       - nginx_logs:/var/log/nginx
-      # Uncomment for SSL certificates
-      # - ./infrastructure/ssl:/etc/nginx/ssl:ro
-      # - certbot_data:/var/www/certbot:ro
     ports:
       - "${HTTP_PORT:-80}:80"
-      # Uncomment for SSL
-      # - "${HTTPS_PORT:-443}:443"
     networks:
       - aypa-network
     depends_on:
@@ -208,18 +176,12 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/nginx-health"]
-      interval: 15s
+      interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: "0.25"
-        reservations:
-          memory: 64M
-          cpus: "0.05"
+    mem_limit: 32m
+    memswap_limit: 64m
 
 # =============================================================================
 # Volumes

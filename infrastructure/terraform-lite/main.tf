@@ -1,6 +1,6 @@
 # =============================================================================
 # Aypa TaxAI - Minimal Cost AWS Setup (Testing/Dev)
-# Single EC2 instance running docker-compose (~$5-15/month)
+# Single EC2 instance running docker-compose (FREE TIER eligible)
 # =============================================================================
 #
 # This is the CHEAPEST way to run Aypa TaxAI on AWS for testing.
@@ -22,7 +22,7 @@
 #   ssh -i aypa-key.pem ec2-user@<public-ip>
 #   cd /opt/aypa && sudo docker-compose up -d
 #
-# Estimated cost: ~$5-15/month (t3.small in ap-south-1)
+# Estimated cost: $0/month with free tier (t2.micro), ~$15/month otherwise
 # =============================================================================
 
 terraform {

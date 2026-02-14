@@ -9,13 +9,13 @@ variable "aws_region" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type (t3.small recommended for testing)"
+  description = "EC2 instance type (t2.micro = FREE TIER)"
   type        = string
-  default     = "t3.small"
+  default     = "t2.micro"
 }
 
 variable "volume_size" {
-  description = "Root EBS volume size in GB"
+  description = "Root EBS volume size in GB (free tier: up to 30 GB gp2/gp3)"
   type        = number
   default     = 30
 }

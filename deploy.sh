@@ -24,7 +24,7 @@ NC='\033[0m'
 echo -e "${BLUE}"
 echo "╔══════════════════════════════════════════╗"
 echo "║        Aypa TaxAI - AWS Deploy           ║"
-echo "║     Single EC2 (~\$10-15/month)           ║"
+echo "║     Single EC2 (FREE TIER eligible)      ║"
 echo "╚══════════════════════════════════════════╝"
 echo -e "${NC}"
 
@@ -68,8 +68,8 @@ if [ ! -f terraform.tfvars ]; then
     read -p "AWS region [ap-south-1]: " AWS_REGION
     AWS_REGION=${AWS_REGION:-ap-south-1}
     echo ""
-    read -p "Instance type [t3.small ~\$15/mo, t2.micro=FREE tier]: " INSTANCE
-    INSTANCE=${INSTANCE:-t3.small}
+    read -p "Instance type [t2.micro=FREE tier (default), t3.small=\$15/mo]: " INSTANCE
+    INSTANCE=${INSTANCE:-t2.micro}
     echo ""
     read -p "Domain name (press Enter to use IP address): " DOMAIN
 
@@ -99,7 +99,7 @@ echo -e "${YELLOW}Planning infrastructure...${NC}"
 terraform plan -out=tfplan
 
 echo ""
-echo -e "${YELLOW}Review the plan above. Estimated cost: ~\$10-15/month${NC}"
+echo -e "${YELLOW}Review the plan above. Cost: FREE with t2.micro (if eligible), ~\$15/mo otherwise${NC}"
 read -p "Deploy now? (yes/no): " CONFIRM
 if [ "$CONFIRM" != "yes" ]; then
     echo "Deployment cancelled."
